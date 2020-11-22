@@ -1242,25 +1242,33 @@ func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
 }
 
 func advanceEvacuationMark(h *hmap, t *maptype, newbit uintptr) {
+	// 已经释放完一个oldbucket则加1
 	h.nevacuate++
 	// Experiments suggest that 1024 is overkill by at least an order of magnitude.
 	// Put it in there as a safeguard anyway, to ensure O(1) behavior.
+	// 最多往后面找1024个oldbucket是否已经迁移，查找太多会影响效率？
+	// 每次插入值的时候就会尝试迁移一部分
 	stop := h.nevacuate + 1024
 	if stop > newbit {
 		stop = newbit
 	}
+	// 最多找1024个oldbuckets，并且判断nevacuate的下一个是否已经搬移，如果判断则+1
 	for h.nevacuate != stop && bucketEvacuated(t, h, h.nevacuate) {
 		h.nevacuate++
 	}
+	// 如果nevacuate等于oldbuckets的个数的值那么整个oldbuckets已经迁移完成了
 	if h.nevacuate == newbit { // newbit == # of oldbuckets
 		// Growing is all done. Free old main bucket array.
+		// 释放oldbuckets
 		h.oldbuckets = nil
 		// Can discard old overflow buckets as well.
 		// If they are still referenced by an iterator,
 		// then the iterator holds a pointers to the slice.
+		// 释放逸出桶的内存
 		if h.extra != nil {
 			h.extra.oldoverflow = nil
 		}
+		// 更改标志位，把第4位变为0
 		h.flags &^= sameSizeGrow
 	}
 }

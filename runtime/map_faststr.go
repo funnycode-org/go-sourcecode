@@ -225,7 +225,8 @@ func mapassign_faststr(t *maptype, h *hmap, s string) unsafe.Pointer {
 
 again:
 	// 获取该key落到第几个bucket,每个bucket指的是类似链并的bmap结构
-	bucket := hash & bucketMask(h.B)
+	mask:=bucketMask(h.B)
+	bucket := hash & mask
 	// 如果存在扩容情况
 	if h.growing() {
 		// 从oldbuckets里面复制到新申请的buckets里面
@@ -402,7 +403,9 @@ func growWork_faststr(t *maptype, h *hmap, bucket uintptr) {
 	// make sure we evacuate the oldbucket corresponding
 	// to the bucket we're about to use
 	// bucket&h.oldbucketmask() 会得到一个oldbuckets中的一个bucket，然后把该bucket里面的数据移到新的bucket里面去，即新申请的。
-	evacuate_faststr(t, h, bucket&h.oldbucketmask())
+	mask := h.oldbucketmask()
+	oldbucket := bucket&mask
+	evacuate_faststr(t, h, oldbucket)
 
 	// evacuate one more oldbucket to make progress on growing
 	if h.growing() {
@@ -521,6 +524,9 @@ func evacuate_faststr(t *maptype, h *hmap, oldbucket uintptr) {
 		}
 	}
 
+	// 这段代码比较魔幻
+	// 据我分析，第一次进入应该当时oldbucket为0的时候。后面也有可能进入，取决于nevacuate的值
+	// 上面只是把bucket里面的数据清除掉了，但是tophash值还在。
 	if oldbucket == h.nevacuate {
 		advanceEvacuationMark(h, t, newbit)
 	}
