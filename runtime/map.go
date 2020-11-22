@@ -243,6 +243,8 @@ func (h *hmap) incrnoverflow() {
 		h.noverflow++
 		return
 	}
+
+	// 当B太大了的时候，判断是否有足够多的溢出桶而需要samesizegrow的时候就,不能像以前没多一个逸出桶就把noverflow+1,而是1/(1<<(h.B-15))的概率+1
 	// Increment with probability 1/(1<<(h.B-15)).
 	// When we reach 1<<15 - 1, we will have approximately
 	// as many overflow buckets as buckets.
@@ -254,6 +256,11 @@ func (h *hmap) incrnoverflow() {
 	}
 }
 
+// 总结下：
+// 由于创建map的时候会预先申请一些与流通，如果在bmap的桶满了的情况下，会来找逸出桶，并且把自己的overflow指针设为逸出桶
+// 分2种情况：
+// 1.当事先申请的逸出桶如果还有剩余的话，则用。并且更新h.extra.nextOverflow为下一个未被使用的逸出桶
+// 2.当预先申请的逸出桶已经被使用完了，则直接内存新申请逸出桶
 func (h *hmap) newoverflow(t *maptype, b *bmap) *bmap {
 	var ovf *bmap
 	if h.extra != nil && h.extra.nextOverflow != nil {
@@ -269,6 +276,7 @@ func (h *hmap) newoverflow(t *maptype, b *bmap) *bmap {
 				println(u)
 			}
 		}
+		// 这么判断的意义是在申请的时候给overflowBmap这个地址设置了buckets的地址，所以可以判断不为空则表示已经用完逸出桶
 		if overflowBmap == nil { // 该桶没有逸出桶
 			// 如果为空的话那么nextOverflow指到下一个逸出桶（没存过数据），因为当前nextOverflow指向的逸出桶马上要存数据了
 			// We're not at the end of the preallocated overflow buckets. Bump the pointer.
