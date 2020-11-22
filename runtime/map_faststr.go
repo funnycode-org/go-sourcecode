@@ -207,6 +207,26 @@ func mapassign_faststr(t *maptype, h *hmap, s string) unsafe.Pointer {
 		callerpc := getcallerpc()
 		racewritepc(unsafe.Pointer(h), callerpc, funcPC(mapassign_faststr))
 	}
+	//d := (*dmap)(unsafe.Pointer(uintptr(h.buckets)))
+	//bucketD := uintptr(0)
+	//for bucketD < bucketShift(h.B)+3 {
+	//	flag := false
+	//	for _, debugKey := range d.debugKeys {
+	//		if debugKey == "" {
+	//			continue
+	//		}
+	//		if flag == false {
+	//			print("bucket:")
+	//			println(bucketD)
+	//		}
+	//		print("key:")
+	//		println(debugKey)
+	//		flag = true
+	//	}
+	//	bucketD++
+	//	d = (*dmap)(unsafe.Pointer(uintptr(h.buckets) + bucketD*uintptr(t.bucketsize)))
+	//}
+	//println()
 	//取出第三位是否是1，如果是1则表示正有另外一个协程在往map里面写数据
 	if h.flags&hashWriting != 0 {
 		throw("concurrent map writes")
@@ -225,7 +245,7 @@ func mapassign_faststr(t *maptype, h *hmap, s string) unsafe.Pointer {
 
 again:
 	// 获取该key落到第几个bucket,每个bucket指的是类似链并的bmap结构
-	mask:=bucketMask(h.B)
+	mask := bucketMask(h.B)
 	bucket := hash & mask
 	// 如果存在扩容情况
 	if h.growing() {
@@ -237,8 +257,8 @@ again:
 	// 得到bmap的tophash值
 	top := tophash(hash)
 
-	var insertb *bmap // 插入到哪个bmap里面
-	var inserti uintptr // 插入到bmap哪个位置
+	var insertb *bmap          // 插入到哪个bmap里面
+	var inserti uintptr        // 插入到bmap哪个位置
 	var insertk unsafe.Pointer // 插入key到bmap哪个位置
 
 	//找到一个空的地方插入该key
@@ -256,14 +276,19 @@ bucketloop:
 				}
 				continue
 			}
+			// 到这里已经找到tophash了，2个不同的key也有可能相等，继续判断是否key相等
+			// 在bucket中的key位置
 			k := (*stringStruct)(add(unsafe.Pointer(b), dataOffset+i*2*sys.PtrSize))
+			// 字符串key的长度都不等的话肯定不是一个key
 			if k.len != key.len {
 				continue
 			}
+			// 要么2个字符串直接相等，要么直接内存地址相等
 			if k.str != key.str && !memequal(k.str, key.str, uintptr(key.len)) {
 				continue
 			}
 			// already have a mapping for key. Update it.
+			// 找到了相同的key，则要去更新value
 			inserti = i
 			insertb = b
 			goto done
@@ -280,6 +305,8 @@ bucketloop:
 
 	// If we hit the max load factor or we have too many overflow buckets,
 	// and we're not already in the middle of growing, start growing.
+	// 如果次数个数超出了增长因子，或者没有超出增长因子，但是有太多的逸出桶了，这个和java的hashmap一样，当太多红黑树了，还是会影响查找效率，因为理想情况下，map的
+	// 查找效率应该是o(1)
 	if !h.growing() && (overLoadFactor(h.count+1, h.B) || tooManyOverflowBuckets(h.noverflow, h.B)) {
 		hashGrow(t, h)
 		goto again // Growing the table invalidates everything, so try again
@@ -287,6 +314,7 @@ bucketloop:
 
 	if insertb == nil {
 		// all current buckets are full, allocate a new one.
+		println(bucket)
 		insertb = h.newoverflow(t, b)
 		inserti = 0 // not necessary, but avoids needlessly spilling inserti
 	}
@@ -304,6 +332,7 @@ bucketloop:
 	h.count++
 
 done:
+	// done不关心是否是更新还是新增，拿到相应的位置即可
 	// 找到value存的内存位置
 	elem := add(unsafe.Pointer(insertb), dataOffset+bucketCnt*2*sys.PtrSize+inserti*uintptr(t.elemsize))
 	if h.flags&hashWriting == 0 {
@@ -404,11 +433,14 @@ func growWork_faststr(t *maptype, h *hmap, bucket uintptr) {
 	// to the bucket we're about to use
 	// bucket&h.oldbucketmask() 会得到一个oldbuckets中的一个bucket，然后把该bucket里面的数据移到新的bucket里面去，即新申请的。
 	mask := h.oldbucketmask()
-	oldbucket := bucket&mask
+	oldbucket := bucket & mask
+	// 迁移逻辑
 	evacuate_faststr(t, h, oldbucket)
 
 	// evacuate one more oldbucket to make progress on growing
+	// 如果还有oldbuckets需要迁移
 	if h.growing() {
+		// 继续移除oldbuckets第nevacuate+1个，也是继续迁移上次迁移后面的那一个桶
 		evacuate_faststr(t, h, h.nevacuate)
 	}
 }
@@ -475,7 +507,7 @@ func evacuate_faststr(t *maptype, h *hmap, oldbucket uintptr) {
 				// 当useY是1的时候就移动到y
 				b.tophash[i] = evacuatedX + useY // evacuatedX + 1 == evacuatedY, enforced in makemap
 				// 得到移动的目标
-				dst := &xy[useY]                 // evacuation destination
+				dst := &xy[useY] // evacuation destination
 
 				// 一个bmap只存8个key/value，超过了就要用dest的溢出桶
 				if dst.i == bucketCnt {
@@ -526,6 +558,7 @@ func evacuate_faststr(t *maptype, h *hmap, oldbucket uintptr) {
 
 	// 这段代码比较魔幻
 	// 据我分析，第一次进入应该当时oldbucket为0的时候。后面也有可能进入，取决于nevacuate的值
+	// 【0，nevacuate+1】之前的oldbuckets已经被迁移了.
 	// 上面只是把bucket里面的数据清除掉了，但是tophash值还在。
 	if oldbucket == h.nevacuate {
 		advanceEvacuationMark(h, t, newbit)
