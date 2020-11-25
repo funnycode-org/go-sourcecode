@@ -138,6 +138,10 @@ type hmap struct {
 	extra *mapextra // optional fields
 }
 
+// 当key和value都没有指针的时候bucket的bmap的_type的ptrdata就是0，意味着该结构体是没有指针的
+// 在申请bmap内存的时候，会申请一个没有指针的span，这样会避免gc扫描该内存，会提高效率，但是bmap的最后一个内存块是确确实实存放指针的，
+// 所以用uintptr存储着该map的逸出桶的地址，但是由于没有指向下一个逸出桶，可能会被gc回收掉，所以就需要overflow存取指向该逸出桶的指针
+// 避免被gc回收掉
 // mapextra holds fields that are not present on all maps.
 type mapextra struct {
 	// If both key and elem do not contain pointers and are inline, then we mark bucket
