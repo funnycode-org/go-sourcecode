@@ -308,6 +308,27 @@ bucketloop:
 	// 如果次数个数超出了增长因子，或者没有超出增长因子，但是有太多的逸出桶了，这个和java的hashmap一样，当太多红黑树了，还是会影响查找效率，因为理想情况下，map的
 	// 查找效率应该是o(1)
 	if !h.growing() && (overLoadFactor(h.count+1, h.B) || tooManyOverflowBuckets(h.noverflow, h.B)) {
+		d := (*dmap)(unsafe.Pointer(uintptr(h.buckets)))
+		bucketD := uintptr(0)
+		for bucketD < bucketShift(h.B)+3 {
+			flag := false
+			for i, debugKey := range d.debugKeys {
+				if debugKey == "" {
+					continue
+				}
+				println(d.tophash[i])
+				if flag == false {
+					print("bucket:")
+					println(bucketD)
+				}
+				print("key:")
+				println(debugKey)
+				flag = true
+			}
+			bucketD++
+			d = (*dmap)(unsafe.Pointer(uintptr(h.buckets) + bucketD*uintptr(t.bucketsize)))
+		}
+		println()
 		hashGrow(t, h)
 		goto again // Growing the table invalidates everything, so try again
 	}
