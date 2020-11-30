@@ -383,14 +383,19 @@ func mapdelete_faststr(t *maptype, h *hmap, ky string) {
 	h.flags ^= hashWriting
 
 	bucket := hash & bucketMask(h.B)
+	// 顺便迁移
 	if h.growing() {
 		growWork_faststr(t, h, bucket)
 	}
+	// 找到key所在的桶
 	b := (*bmap)(add(h.buckets, bucket*uintptr(t.bucketsize)))
+	// 记录下刚开始key的所在的桶
 	bOrig := b
 	top := tophash(hash)
 search:
+	// 外层循环该key所在的桶以及桶后面的逸出桶
 	for ; b != nil; b = b.overflow(t) {
+		// 遍历桶的数据
 		for i, kptr := uintptr(0), b.keys(); i < bucketCnt; i, kptr = i+1, add(kptr, 2*sys.PtrSize) {
 			k := (*stringStruct)(kptr)
 			if k.len != key.len || b.tophash[i] != top {
@@ -400,16 +405,21 @@ search:
 				continue
 			}
 			// Clear key's pointer.
+			// 清除key
 			k.str = nil
 			e := add(unsafe.Pointer(b), dataOffset+bucketCnt*2*sys.PtrSize+i*uintptr(t.elemsize))
+			// 清除value的内存
 			if t.elem.ptrdata != 0 {
 				memclrHasPointers(e, t.elem.size)
 			} else {
 				memclrNoHeapPointers(e, t.elem.size)
 			}
+			// 标记为值已经被清除
 			b.tophash[i] = emptyOne
 			// If the bucket now ends in a bunch of emptyOne states,
 			// change those to emptyRest states.
+			// 判断该所在桶的key后面的key是否都已经被清空
+			// 或者如果该key已经是桶内的第8个key，那么就判断该桶的所有逸出桶是否已经被清空
 			if i == bucketCnt-1 {
 				if b.overflow(t) != nil && b.overflow(t).tophash[0] != emptyRest {
 					goto notLast
@@ -419,6 +429,8 @@ search:
 					goto notLast
 				}
 			}
+			// 往前面一直去试图标记桶的hash槽为emptyRest状态
+			// 当该槽的状态为emptyRest之后，那么就是该key之后所有的槽，以及该桶后面的逸出桶都是emptyRest
 			for {
 				b.tophash[i] = emptyRest
 				if i == 0 {
@@ -427,12 +439,14 @@ search:
 					}
 					// Find previous bucket, continue at its last entry.
 					c := b
+					// 去找该桶的前一个桶
 					for b = bOrig; b.overflow(t) != c; b = b.overflow(t) {
 					}
 					i = bucketCnt - 1
 				} else {
 					i--
 				}
+				// 如果是emptyOne，也就是被删除了，那么就标记为emptyRest
 				if b.tophash[i] != emptyOne {
 					break
 				}
