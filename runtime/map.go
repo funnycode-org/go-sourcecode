@@ -116,23 +116,23 @@ type hmap struct {
 	// Note: the format of the hmap is also encoded in cmd/compile/internal/gc/reflect.go.
 	// Make sure this stays in sync with the compiler's definition.
 	// map存储的键值对个数
-	count     int // # live cells == size of map.  Must be first (used by len() builtin)
+	count int // # live cells == size of map.  Must be first (used by len() builtin)
 	// 表示map的一些标志位
-	flags     uint8
+	flags uint8
 	// map的桶的2的对数就是B值
-	B         uint8  // log_2 of # of buckets (can hold up to loadFactor * 2^B items)
+	B uint8 // log_2 of # of buckets (can hold up to loadFactor * 2^B items)
 	// 溢出桶个数，是个近似数，不完全相等
 	noverflow uint16 // approximate number of overflow buckets; see incrnoverflow for details
 	// hash种子
-	hash0     uint32 // hash seed
+	hash0 uint32 // hash seed
 
 	// 桶，真正存数据的地方，2^B个桶
-	buckets    unsafe.Pointer // array of 2^B Buckets. may be nil if count==0.
+	buckets unsafe.Pointer // array of 2^B Buckets. may be nil if count==0.
 
 	// 保存一些即将迁移的桶
 	oldbuckets unsafe.Pointer // previous bucket array of half the size, non-nil only when growing
 	// 从oldbuckets迁移到新的buckets的进度
-	nevacuate  uintptr        // progress counter for evacuation (buckets less than this have been evacuated)
+	nevacuate uintptr // progress counter for evacuation (buckets less than this have been evacuated)
 
 	// 当key不是指针类型的数据的时候，里面会存溢出桶，这样会避免go的扫描
 	extra *mapextra // optional fields
@@ -178,9 +178,9 @@ type bmap struct {
 }
 
 type dmap struct {
-	tophash        [bucketCnt]uint8
-	debugKeys      [bucketCnt]string
-	debugElems     [bucketCnt]string
+	tophash    [bucketCnt]uint8
+	debugKeys  [bucketCnt]string
+	debugElems [bucketCnt]string
 	//debugOverflows unsafe.Pointer
 	debugOverflows uintptr
 }
@@ -191,33 +191,33 @@ type dmap struct {
 // 8 * 9 + 4 * 1 + (偏移4位) + 8 * 2 = 8 * 12
 type hiter struct {
 	// 8个字节
-	key         unsafe.Pointer // Must be in first position.  Write nil to indicate iteration end (see cmd/internal/gc/range.go).
+	key unsafe.Pointer // Must be in first position.  Write nil to indicate iteration end (see cmd/internal/gc/range.go).
 	// 8个字节
-	elem        unsafe.Pointer // Must be in second position (see cmd/internal/gc/range.go).
+	elem unsafe.Pointer // Must be in second position (see cmd/internal/gc/range.go).
 	// 8个字节
-	t           *maptype
+	t *maptype
 	// 8个字节
-	h           *hmap
+	h *hmap
 	// 8个字节
-	buckets     unsafe.Pointer // bucket ptr at hash_iter initialization time
+	buckets unsafe.Pointer // bucket ptr at hash_iter initialization time
 	// 8个字节
-	bptr        *bmap          // current bucket
+	bptr *bmap // current bucket
 	// 8个字节
-	overflow    *[]*bmap       // keeps overflow buckets of hmap.buckets alive
+	overflow *[]*bmap // keeps overflow buckets of hmap.buckets alive
 	// 8个字节
-	oldoverflow *[]*bmap       // keeps overflow buckets of hmap.oldbuckets alive
+	oldoverflow *[]*bmap // keeps overflow buckets of hmap.oldbuckets alive
 	// 8个字节
-	startBucket uintptr        // bucket iteration started at
+	startBucket uintptr // bucket iteration started at
 	// 1个字节
-	offset      uint8          // intra-bucket offset to start from during iteration (should be big enough to hold bucketCnt-1)
+	offset uint8 // intra-bucket offset to start from during iteration (should be big enough to hold bucketCnt-1)
 	// 1个字节
-	wrapped     bool           // already wrapped around from end of bucket array to beginning
+	wrapped bool // already wrapped around from end of bucket array to beginning
 	// 1个字节
-	B           uint8
+	B uint8
 	// 1个字节
-	i           uint8
+	i uint8
 	// 8个字节
-	bucket      uintptr
+	bucket uintptr
 	// 8个字节
 	checkBucket uintptr
 }
@@ -883,7 +883,6 @@ func mapiterinit(t *maptype, h *hmap, it *hiter) {
 	}
 
 	size := unsafe.Sizeof(hiter{})
-	println(size)
 	// 意义在哪里
 	if size/sys.PtrSize != 12 {
 		throw("hash_iter size incorrect") // see cmd/compile/internal/gc/reflect.go
@@ -943,6 +942,7 @@ func mapiternext(it *hiter) {
 
 next:
 	if b == nil {
+		// 循环了一圈，到开始迭代的桶，那么就结束了
 		if bucket == it.startBucket && it.wrapped {
 			// end of iteration
 			it.key = nil
@@ -954,11 +954,14 @@ next:
 			// If the bucket we're looking at hasn't been filled in yet (i.e. the old
 			// bucket hasn't been evacuated) then we need to iterate through the old
 			// bucket and only return the ones that will be migrated to this bucket.
+			// 在迁移过程中迭代可能有些数据并不会迭代出来，如果老桶的第一个已经被迁移了，但是后面的还没迭代，此时去迭代新桶就会忘掉一些数据
 			oldbucket := bucket & it.h.oldbucketmask()
 			b = (*bmap)(add(h.oldbuckets, oldbucket*uintptr(t.bucketsize)))
+			// 如果还没开始搬迁的话那么就去迭代老桶
 			if !evacuated(b) {
 				checkBucket = bucket
 			} else {
+				// 否则还是跌打新扩容之后的桶
 				b = (*bmap)(add(it.buckets, bucket*uintptr(t.bucketsize)))
 				checkBucket = noCheck
 			}
@@ -967,6 +970,7 @@ next:
 			checkBucket = noCheck
 		}
 		bucket++
+		// 迭代到最后一个桶了，标记wrapped为true，置bucket为0，从第一个开始迭代
 		if bucket == bucketShift(it.B) {
 			bucket = 0
 			it.wrapped = true
@@ -974,7 +978,10 @@ next:
 		i = 0
 	}
 	for ; i < bucketCnt; i++ {
+		// 弄个偏移有意思吗？还不是要循环8次
 		offi := (i + it.offset) & (bucketCnt - 1)
+		println("i:", i)
+		println("offi：", offi)
 		if isEmpty(b.tophash[offi]) || b.tophash[offi] == evacuatedEmpty {
 			// TODO: emptyRest is hard to use here, as we start iterating
 			// in the middle of a bucket. It's feasible, just tricky.
@@ -985,6 +992,8 @@ next:
 			k = *((*unsafe.Pointer)(k))
 		}
 		e := add(unsafe.Pointer(b), dataOffset+bucketCnt*uintptr(t.keysize)+uintptr(offi)*uintptr(t.elemsize))
+		// 不等的话说明是迭代老桶了
+		// 而且还不是同数量桶扩容，那么就要判断老桶的数据是否是迁移到当前的新桶，如果不是则忽略该老桶的当前位置的key
 		if checkBucket != noCheck && !h.sameSizeGrow() {
 			// Special case: iterator was started during a grow to a larger size
 			// and the grow is not done yet. We're working on a bucket whose
@@ -1008,6 +1017,7 @@ next:
 				// NOTE: this case is why we need two evacuate tophash
 				// values, evacuatedX and evacuatedY, that differ in
 				// their low bit.
+				// 不建议在设置key的时候用这种类型，在java中一般都是用不可变对象做key
 				if checkBucket>>(it.B-1) != uintptr(b.tophash[offi]&1) {
 					continue
 				}
@@ -1019,8 +1029,10 @@ next:
 			// OR
 			// key!=key, so the entry can't be deleted or updated, so we can just return it.
 			// That's lucky for us because when key!=key we can't look it up successfully.
+			// 找到了key和value
 			it.key = k
 			if t.indirectelem() {
+				// 如果value是个指针的，则剖析出值
 				e = *((*unsafe.Pointer)(e))
 			}
 			it.elem = e
@@ -1032,6 +1044,7 @@ next:
 			// has been deleted, updated, or deleted and reinserted.
 			// NOTE: we need to regrab the key as it has potentially been
 			// updated to an equal() but not identical key (e.g. +0.0 vs -0.0).
+			// 同上
 			rk, re := mapaccessK(t, h, k)
 			if rk == nil {
 				continue // key has been deleted
@@ -1041,12 +1054,15 @@ next:
 		}
 		it.bucket = bucket
 		if it.bptr != b { // avoid unnecessary write barrier; see issue 14921
+			// bucket变了
 			it.bptr = b
 		}
+		// 迭代下一个
 		it.i = i + 1
 		it.checkBucket = checkBucket
 		return
 	}
+	// 迭代逸出桶
 	b = b.overflow(t)
 	i = 0
 	goto next
