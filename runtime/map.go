@@ -352,6 +352,7 @@ func makemap_small() *hmap {
 // If h.buckets != nil, bucket pointed to can be used as the first bucket.
 func makemap(t *maptype, hint int, h *hmap) *hmap {
 	mem, overflow := math.MulUintptr(uintptr(hint), t.bucket.size)
+	// 是否超出了最大的可分配虚拟内存或者超出了uintptr表示的值
 	if overflow || mem > maxAlloc {
 		hint = 0
 	}
@@ -360,11 +361,14 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
 	if h == nil {
 		h = new(hmap)
 	}
+	// 随机hash因子
 	h.hash0 = fastrand()
 
 	// Find the size parameter B which will hold the requested # of elements.
 	// For hint < 0 overLoadFactor returns false since hint < bucketCnt.
+	// 计算B的值，桶的个数为 1 << B
 	B := uint8(0)
+	// 不断的循环得到最大的B值
 	for overLoadFactor(hint, B) {
 		B++
 	}
@@ -375,9 +379,11 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
 	// If hint is large zeroing this memory could take a while.
 	if h.B != 0 {
 		var nextOverflow *bmap
+		// 根据B的值去申请桶，包括逸出桶
 		h.buckets, nextOverflow = makeBucketArray(t, h.B, nil)
 		if nextOverflow != nil {
 			h.extra = new(mapextra)
+			// nextOverflow指向逸出桶的内存地址
 			h.extra.nextOverflow = nextOverflow
 		}
 	}
