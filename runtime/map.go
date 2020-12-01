@@ -286,11 +286,11 @@ func (h *hmap) newoverflow(t *maptype, b *bmap) *bmap {
 		ovf = h.extra.nextOverflow
 		// ovf.overflow(t) 得到逸出桶链表的下一个
 		overflowBmap := (*dmap)(unsafe.Pointer(ovf.overflow(t)))
-		if overflowBmap != nil {
-			for _, u := range overflowBmap.debugKeys {
-				println(u)
-			}
-		}
+		//if overflowBmap != nil {
+		//	for _, u := range overflowBmap.debugKeys {
+		//		println(u)
+		//	}
+		//}
 		// 这么判断的意义是在申请的时候给overflowBmap这个地址设置了buckets的地址，所以可以判断不为空则表示已经用完逸出桶
 		if overflowBmap == nil { // 该桶没有逸出桶
 			// 如果为空的话那么nextOverflow指到下一个逸出桶（没存过数据），因为当前nextOverflow指向的逸出桶马上要存数据了
