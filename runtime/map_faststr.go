@@ -405,7 +405,7 @@ search:
 				continue
 			}
 			// Clear key's pointer.
-			// 清除key
+			// 清除key的字符，把长度留下
 			k.str = nil
 			e := add(unsafe.Pointer(b), dataOffset+bucketCnt*2*sys.PtrSize+i*uintptr(t.elemsize))
 			// 清除value的内存

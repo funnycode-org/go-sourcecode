@@ -1,0 +1,1 @@
+main.go:0: open main.go: The system cannot find the file specified.

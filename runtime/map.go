@@ -188,21 +188,37 @@ type dmap struct {
 // A hash iteration structure.
 // If you modify hiter, also change cmd/compile/internal/gc/reflect.go to indicate
 // the layout of this structure.
+// 8 * 9 + 4 * 1 + (偏移4位) + 8 * 2 = 8 * 12
 type hiter struct {
+	// 8个字节
 	key         unsafe.Pointer // Must be in first position.  Write nil to indicate iteration end (see cmd/internal/gc/range.go).
+	// 8个字节
 	elem        unsafe.Pointer // Must be in second position (see cmd/internal/gc/range.go).
+	// 8个字节
 	t           *maptype
+	// 8个字节
 	h           *hmap
+	// 8个字节
 	buckets     unsafe.Pointer // bucket ptr at hash_iter initialization time
+	// 8个字节
 	bptr        *bmap          // current bucket
+	// 8个字节
 	overflow    *[]*bmap       // keeps overflow buckets of hmap.buckets alive
+	// 8个字节
 	oldoverflow *[]*bmap       // keeps overflow buckets of hmap.oldbuckets alive
+	// 8个字节
 	startBucket uintptr        // bucket iteration started at
+	// 1个字节
 	offset      uint8          // intra-bucket offset to start from during iteration (should be big enough to hold bucketCnt-1)
+	// 1个字节
 	wrapped     bool           // already wrapped around from end of bucket array to beginning
+	// 1个字节
 	B           uint8
+	// 1个字节
 	i           uint8
+	// 8个字节
 	bucket      uintptr
+	// 8个字节
 	checkBucket uintptr
 }
 
@@ -866,7 +882,10 @@ func mapiterinit(t *maptype, h *hmap, it *hiter) {
 		return
 	}
 
-	if unsafe.Sizeof(hiter{})/sys.PtrSize != 12 {
+	size := unsafe.Sizeof(hiter{})
+	println(size)
+	// 意义在哪里
+	if size/sys.PtrSize != 12 {
 		throw("hash_iter size incorrect") // see cmd/compile/internal/gc/reflect.go
 	}
 	it.t = t
@@ -890,7 +909,9 @@ func mapiterinit(t *maptype, h *hmap, it *hiter) {
 	if h.B > 31-bucketCntBits {
 		r += uintptr(fastrand()) << 31
 	}
+	// 随机找到一个开始的桶
 	it.startBucket = r & bucketMask(h.B)
+	// 随机找到一个开始的桶的数据
 	it.offset = uint8(r >> h.B & (bucketCnt - 1))
 
 	// iterator state
