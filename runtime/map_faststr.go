@@ -267,10 +267,12 @@ bucketloop:
 		for i := uintptr(0); i < bucketCnt; i++ {
 			if b.tophash[i] != top {
 				if isEmpty(b.tophash[i]) && insertb == nil {
+					println("我确实进来了啊")
 					insertb = b
 					inserti = i
 				}
 				// 一开始都是0，也就是emptyRest
+				// 当是emptyRest状态的时候就表示该桶后面没有数据了，或者说是后面的溢出桶也没有数据了，所以就不用接着找了，不用担心后面会找到一个相同key的数据
 				if b.tophash[i] == emptyRest {
 					break bucketloop
 				}
