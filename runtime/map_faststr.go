@@ -267,7 +267,7 @@ bucketloop:
 		for i := uintptr(0); i < bucketCnt; i++ {
 			if b.tophash[i] != top {
 				if isEmpty(b.tophash[i]) && insertb == nil {
-					println("我确实进来了啊")
+					//println("我确实进来了啊")
 					insertb = b
 					inserti = i
 				}
@@ -337,7 +337,7 @@ bucketloop:
 
 	if insertb == nil {
 		// all current buckets are full, allocate a new one.
-		println(bucket)
+		//println(bucket)
 		insertb = h.newoverflow(t, b)
 		inserti = 0 // not necessary, but avoids needlessly spilling inserti
 	}

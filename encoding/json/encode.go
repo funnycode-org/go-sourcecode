@@ -36,13 +36,13 @@ import (
 // The nil pointer exception is not strictly necessary
 // but mimics a similar, necessary exception in the behavior of
 // UnmarshalJSON.
-//
+// 序列化调用MarshalJSON，其次调用TextMarshaler
 // Otherwise, Marshal uses the following type-dependent default encodings:
 //
 // Boolean values encode as JSON booleans.
-//
+// 布尔 类型转为 json的boolean
 // Floating point, integer, and Number values encode as JSON numbers.
-//
+// 浮点数，整数，数编码位json的numbers
 // String values encode as JSON strings coerced to valid UTF-8,
 // replacing invalid bytes with the Unicode replacement rune.
 // So that the JSON will be safe to embed inside HTML <script> tags,
@@ -51,30 +51,30 @@ import (
 // to "\u003c","\u003e", "\u0026", "\u2028", and "\u2029".
 // This replacement can be disabled when using an Encoder,
 // by calling SetEscapeHTML(false).
-//
+// 字符串会被编码为UTF-8，"<", ">", "&", U+2028, and U+2029会使用unicode编码
 // Array and slice values encode as JSON arrays, except that
 // []byte encodes as a base64-encoded string, and a nil slice
 // encodes as the null JSON value.
-//
+// 数组和切片编码为json的数组，字节数组会被编码为base64的字符串
 // Struct values encode as JSON objects.
 // Each exported struct field becomes a member of the object, using the
 // field name as the object key, unless the field is omitted for one of the
 // reasons given below.
-//
+// 结构体会被编码为Json对象，结构体的每个域名作为对象的key，下面几种情况会忽略编码key
 // The encoding of each struct field can be customized by the format string
 // stored under the "json" key in the struct field's tag.
 // The format string gives the name of the field, possibly followed by a
 // comma-separated list of options. The name may be empty in order to
 // specify options without overriding the default field name.
-//
+// 能用json这个tag自定义key名
 // The "omitempty" option specifies that the field should be omitted
 // from the encoding if the field has an empty value, defined as
 // false, 0, a nil pointer, a nil interface value, and any empty array,
 // slice, map, or string.
-//
+// 当结构体的域没有值的时候，omitempty这个配置会让json忽略这个域
 // As a special case, if the field tag is "-", the field is always omitted.
 // Note that a field with name "-" can still be generated using the tag "-,".
-//
+// 特殊情况，如果tag是"-",那么这个域始终会被json忽略。当用标签"-,"的时候，json会使用“-”作为key
 // Examples of struct field tags and their meanings:
 //
 //   // Field appears in JSON as key "myName".
@@ -102,7 +102,7 @@ import (
 // when communicating with JavaScript programs:
 //
 //    Int64String int64 `json:",string"`
-//
+// 标签是 “string”的话会将域的值转为string，虽然是int类型的值
 // The key name will be used if it's a non-empty string consisting of
 // only Unicode letters, digits, and ASCII punctuation except quotation
 // marks, backslash, and comma.
@@ -114,13 +114,13 @@ import (
 // having that name, rather than being anonymous.
 // An anonymous struct field of interface type is treated the same as having
 // that type as its name, rather than being anonymous.
-//
+// 匿名结构体
 // The Go visibility rules for struct fields are amended for JSON when
 // deciding which field to marshal or unmarshal. If there are
 // multiple fields at the same level, and that level is the least
 // nested (and would therefore be the nesting level selected by the
 // usual Go rules), the following extra rules apply:
-//
+// json序列化的时候如何判定序列化到哪个级别
 // 1) Of those fields, if any are JSON-tagged, only tagged fields are considered,
 // even if there are multiple untagged fields that would otherwise conflict.
 //
@@ -132,7 +132,7 @@ import (
 // Prior to Go 1.1, anonymous struct fields were ignored. To force ignoring of
 // an anonymous struct field in both current and earlier versions, give the field
 // a JSON tag of "-".
-//
+// 1.1的版本估计没人用了吧
 // Map values encode as JSON objects. The map's key type must either be a
 // string, an integer type, or implement encoding.TextMarshaler. The map keys
 // are sorted and used as JSON object keys by applying the following rules,
@@ -140,21 +140,21 @@ import (
 //   - keys of any string type are used directly
 //   - encoding.TextMarshalers are marshaled
 //   - integer keys are converted to strings
-//
+//   key可以实现encoding.TextMarshalers，int类型的key会被转为string
 // Pointer values encode as the value pointed to.
 // A nil pointer encodes as the null JSON value.
-//
+// 指针指向的值被编码
 // Interface values encode as the value contained in the interface.
 // A nil interface value encodes as the null JSON value.
-//
+// 接口包括的内容被编码
 // Channel, complex, and function values cannot be encoded in JSON.
 // Attempting to encode such a value causes Marshal to return
 // an UnsupportedTypeError.
-//
+//  Channel，complex 和方法不能被序列化
 // JSON cannot represent cyclic data structures and Marshal does not
 // handle them. Passing cyclic structures to Marshal will result in
 // an error.
-//
+// 不能够处理循环的数据结构
 func Marshal(v interface{}) ([]byte, error) {
 	e := newEncodeState()
 
