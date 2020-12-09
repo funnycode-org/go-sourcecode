@@ -291,6 +291,7 @@ type encodeState struct {
 	// the relatively expensive map operations if ptrLevel is larger than
 	// startDetectingCyclesAfter, so that we skip the work if we're within a
 	// reasonable amount of nested pointers deep.
+	// 避免递归调用太深
 	ptrLevel uint
 	ptrSeen  map[interface{}]struct{}
 }
@@ -362,6 +363,7 @@ type encOpts struct {
 	// quoted causes primitive fields to be encoded inside JSON strings.
 	quoted bool
 	// escapeHTML causes '<', '>', and '&' to be escaped in JSON strings.
+	// 是否编码html标签
 	escapeHTML bool
 }
 
@@ -373,6 +375,7 @@ func valueEncoder(v reflect.Value) encoderFunc {
 	if !v.IsValid() {
 		return invalidValueEncoder
 	}
+	// 通过filed的类型找到合适的编码方法
 	return typeEncoder(v.Type())
 }
 
@@ -1196,7 +1199,7 @@ func typeFields(t reflect.Type) structFields {
 
 	// Buffer to run HTMLEscape on field names.
 	var nameEscBuf bytes.Buffer
-
+	// 遍历出所有域
 	for len(next) > 0 {
 		current, next = next, current[:0]
 		count, nextCount = nextCount, map[reflect.Type]int{}
@@ -1210,14 +1213,14 @@ func typeFields(t reflect.Type) structFields {
 			// Scan f.typ for fields to include.
 			for i := 0; i < f.typ.NumField(); i++ {
 				sf := f.typ.Field(i)
-				isUnexported := sf.PkgPath != ""
+				isUnexported := sf.PkgPath != "" // 不是能被导出的就不序列化
 				if sf.Anonymous {
 					t := sf.Type
 					if t.Kind() == reflect.Ptr {
 						t = t.Elem()
 					}
 					if isUnexported && t.Kind() != reflect.Struct {
-						// Ignore embedded fields of unexported non-struct types.
+						// Ignore embedded fields of unexported non-struct types. 不被导出的内嵌结构体忽略
 						continue
 					}
 					// Do not ignore embedded fields of unexported struct types
@@ -1227,7 +1230,7 @@ func typeFields(t reflect.Type) structFields {
 					continue
 				}
 				tag := sf.Tag.Get("json")
-				if tag == "-" {
+				if tag == "-" { // tag是“-”则不序列化该字段
 					continue
 				}
 				name, opts := parseTag(tag)
@@ -1246,7 +1249,7 @@ func typeFields(t reflect.Type) structFields {
 
 				// Only strings, floats, integers, and booleans can be quoted.
 				quoted := false
-				if opts.Contains("string") {
+				if opts.Contains("string") { // 如果tag包含"string",则需要把值转为string
 					switch ft.Kind() {
 					case reflect.Bool,
 						reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
@@ -1325,6 +1328,7 @@ func typeFields(t reflect.Type) structFields {
 	// The fields are sorted in primary order of name, secondary order
 	// of field index length. Loop over names; for each name, delete
 	// hidden fields by choosing the one dominant field that survives.
+	// 按照json的规则过滤一些字段
 	out := fields[:0]
 	for advance, i := 0, 0; i < len(fields); i += advance {
 		// One iteration per name.
@@ -1352,6 +1356,8 @@ func typeFields(t reflect.Type) structFields {
 
 	for i := range fields {
 		f := &fields[i]
+		// 给每个字段设置编码器，该编码器用来编码字段的值
+
 		f.encoder = typeEncoder(typeByIndex(t, f.index))
 	}
 	nameIndex := make(map[string]int, len(fields))
@@ -1361,7 +1367,7 @@ func typeFields(t reflect.Type) structFields {
 	return structFields{fields, nameIndex}
 }
 
-// dominantField looks through the fields, all of which are known to
+// dtype\ominantField looks through the fields, all of which are known to
 // have the same name, to find the single field that dominates the
 // others using Go's embedding rules, modified by the presence of
 // JSON tags. If there are multiple top-level fields, the boolean
@@ -1370,7 +1376,7 @@ func typeFields(t reflect.Type) structFields {
 func dominantField(fields []field) (field, bool) {
 	// The fields are sorted in increasing index-length order, then by presence of tag.
 	// That means that the first field is the dominant one. We need only check
-	// for error cases: two fields at top level, either both tagged or neither tagged.
+	// for error cases: two fields at top level, either both tagged or neither tagged. 比较深度，比较是否有tag
 	if len(fields) > 1 && len(fields[0].index) == len(fields[1].index) && fields[0].tag == fields[1].tag {
 		return field{}, false
 	}
