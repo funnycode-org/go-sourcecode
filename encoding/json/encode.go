@@ -361,6 +361,7 @@ func (e *encodeState) reflectValue(v reflect.Value, opts encOpts) {
 
 type encOpts struct {
 	// quoted causes primitive fields to be encoded inside JSON strings.
+	// 是否需要把不是string的值编码为string
 	quoted bool
 	// escapeHTML causes '<', '>', and '&' to be escaped in JSON strings.
 	// 是否编码html标签
@@ -392,6 +393,7 @@ func typeEncoder(t reflect.Type) encoderFunc {
 		wg sync.WaitGroup
 		f  encoderFunc
 	)
+	// 防止多迭代情况下使用还没被初始化完成的f
 	wg.Add(1)
 	fi, loaded := encoderCache.LoadOrStore(t, encoderFunc(func(e *encodeState, v reflect.Value, opts encOpts) {
 		wg.Wait()
@@ -415,11 +417,16 @@ var (
 
 // newTypeEncoder constructs an encoderFunc for a type.
 // The returned encoder only checks CanAddr when allowAddr is true.
+// 根据类型找到相应的类型编码器
 func newTypeEncoder(t reflect.Type, allowAddr bool) encoderFunc {
+	println(t.Name())
+	println(reflect.PtrTo(t).Implements(marshalerType))
+	println(t.Implements(marshalerType))
 	// If we have a non-pointer value whose type implements
 	// Marshaler with a value receiver, then we're better off taking
 	// the address of the value - otherwise we end up with an
 	// allocation as we cast the value to an interface.
+	// 非指针变量实现了Marshaler则
 	if t.Kind() != reflect.Ptr && allowAddr && reflect.PtrTo(t).Implements(marshalerType) {
 		return newCondAddrEncoder(addrMarshalerEncoder, newTypeEncoder(t, false))
 	}
@@ -487,6 +494,7 @@ func marshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	}
 }
 
+// 实现了Marshaler的MarshalJSON方法
 func addrMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	va := v.Addr()
 	if va.IsNil() {
@@ -551,6 +559,8 @@ func boolEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 
 func intEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	b := strconv.AppendInt(e.scratch[:0], v.Int(), 10)
+	println("int的值", v.Int())
+	println("b的值", string(b))
 	if opts.quoted {
 		e.WriteByte('"')
 	}
@@ -714,6 +724,7 @@ func interfaceEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 		e.WriteString("null")
 		return
 	}
+	// 如果是指针就迭代调用reflectValue处理
 	e.reflectValue(v.Elem(), opts)
 }
 
@@ -737,10 +748,11 @@ FieldLoop:
 		f := &se.fields.list[i]
 
 		// Find the nested struct field by following f.index.
+		// 找到字段对应结构体的field
 		fv := v
 		for _, i := range f.index {
 			if fv.Kind() == reflect.Ptr {
-				if fv.IsNil() {
+				if fv.IsNil() { // 如果是空指针的字段则不做任何处理
 					continue FieldLoop
 				}
 				fv = fv.Elem()
@@ -748,9 +760,11 @@ FieldLoop:
 			fv = fv.Field(i)
 		}
 
+		// omitEmpty tag 处理，如果为空则不编码
 		if f.omitEmpty && isEmptyValue(fv) {
 			continue
 		}
+		// 开始编码
 		e.WriteByte(next)
 		next = ','
 		if opts.escapeHTML {
@@ -759,6 +773,7 @@ FieldLoop:
 			e.WriteString(f.nameNonEsc)
 		}
 		opts.quoted = f.quoted
+		// 用编码方法编码
 		f.encoder(e, fv, opts)
 	}
 	if next == '{' {
@@ -908,6 +923,7 @@ func (pe ptrEncoder) encode(e *encodeState, v reflect.Value, opts encOpts) {
 	if e.ptrLevel++; e.ptrLevel > startDetectingCyclesAfter {
 		// We're a large number of nested ptrEncoder.encode calls deep;
 		// start checking if we've run into a pointer cycle.
+		// 检测循环指针
 		ptr := v.Interface()
 		if _, ok := e.ptrSeen[ptr]; ok {
 			e.error(&UnsupportedValueError{v, fmt.Sprintf("encountered a cycle via %s", v.Type())})
