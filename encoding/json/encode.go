@@ -421,6 +421,7 @@ func newTypeEncoder(t reflect.Type, allowAddr bool) encoderFunc {
 	// the address of the value - otherwise we end up with an
 	// allocation as we cast the value to an interface.
 	if t.Kind() != reflect.Ptr && allowAddr && reflect.PtrTo(t).Implements(marshalerType) {
+		// 不是指针但是实现了Marshaler
 		return newCondAddrEncoder(addrMarshalerEncoder, newTypeEncoder(t, false))
 	}
 	if t.Implements(marshalerType) {
@@ -721,15 +722,19 @@ func unsupportedTypeEncoder(e *encodeState, v reflect.Value, _ encOpts) {
 	e.error(&UnsupportedTypeError{v.Type()})
 }
 
+// 结构体编码器，包含了结构体需要序列化字段的编码器
 type structEncoder struct {
 	fields structFields
 }
 
 type structFields struct {
+	// 所有需要序列化的字段
 	list      []field
+	// 每个字段所对应的索引位置
 	nameIndex map[string]int
 }
 
+// 真正进行编码
 func (se structEncoder) encode(e *encodeState, v reflect.Value, opts encOpts) {
 	next := byte('{')
 FieldLoop:
@@ -930,6 +935,7 @@ type condAddrEncoder struct {
 
 func (ce condAddrEncoder) encode(e *encodeState, v reflect.Value, opts encOpts) {
 	if v.CanAddr() {
+		// slice 可寻址的数组 可寻址的结构体的字段 解引用指针的结果
 		ce.canAddrEnc(e, v, opts)
 	} else {
 		ce.elseEnc(e, v, opts)
@@ -1357,7 +1363,6 @@ func typeFields(t reflect.Type) structFields {
 	for i := range fields {
 		f := &fields[i]
 		// 给每个字段设置编码器，该编码器用来编码字段的值
-
 		f.encoder = typeEncoder(typeByIndex(t, f.index))
 	}
 	nameIndex := make(map[string]int, len(fields))
