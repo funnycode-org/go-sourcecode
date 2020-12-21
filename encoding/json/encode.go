@@ -110,24 +110,26 @@ import (
 // Anonymous struct fields are usually marshaled as if their inner exported fields
 // were fields in the outer struct, subject to the usual Go visibility rules amended
 // as described in the next paragraph.
+// 匿名结构体在序列化的过程中，基于go的匿名结构体，还会按照下面的规则修正下。
 // An anonymous struct field with a name given in its JSON tag is treated as
 // having that name, rather than being anonymous.
+// 匿名结构体的资源有json的标签的时候，就是用这个json标签标记的名字，忽略把它当做匿名结构体的go的可见性规则。
 // An anonymous struct field of interface type is treated the same as having
 // that type as its name, rather than being anonymous.
-// 匿名结构体
+// 匿名字段的接口类型用作序列化的名字，而不是当做一个匿名字段处理。
 // The Go visibility rules for struct fields are amended for JSON when
 // deciding which field to marshal or unmarshal. If there are
 // multiple fields at the same level, and that level is the least
 // nested (and would therefore be the nesting level selected by the
 // usual Go rules), the following extra rules apply:
-// json序列化的时候如何判定序列化到哪个级别
+// 如果同一个级别有多个相同的字段
 // 1) Of those fields, if any are JSON-tagged, only tagged fields are considered,
 // even if there are multiple untagged fields that would otherwise conflict.
-//
+// 1) 在同级别的字段中，只有被打了json标签的字段才会被考虑序列化
 // 2) If there is exactly one field (tagged or not according to the first rule), that is selected.
-//
+// 2) 如果只有一个字段（打标签或者不属于第一个规则），该字段肯定会被选择
 // 3) Otherwise there are multiple fields, and all are ignored; no error occurs.
-//
+// 3) 然后如果有多个字段，那么就会被忽略，并且没有错误返回。
 // Handling of anonymous struct fields is new in Go 1.1.
 // Prior to Go 1.1, anonymous struct fields were ignored. To force ignoring of
 // an anonymous struct field in both current and earlier versions, give the field
