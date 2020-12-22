@@ -1243,6 +1243,7 @@ func typeFields(t reflect.Type) structFields {
 					if t.Kind() == reflect.Ptr {
 						t = t.Elem()
 					}
+					// 匿名结构体不被导出就打住
 					if isUnexported && t.Kind() != reflect.Struct {
 						// Ignore embedded fields of unexported non-struct types. 不被导出的内嵌结构体忽略
 						continue
@@ -1251,6 +1252,7 @@ func typeFields(t reflect.Type) structFields {
 					// since they may have exported fields.
 				} else if isUnexported {
 					// Ignore unexported non-embedded fields.
+					//不可导出就打住
 					continue
 				}
 				tag := sf.Tag.Get("json")
@@ -1302,6 +1304,7 @@ func typeFields(t reflect.Type) structFields {
 					field.equalFold = foldFunc(field.nameBytes)
 
 					// Build nameEscHTML and nameNonEsc ahead of time.
+					//编码字段的类型
 					nameEscBuf.Reset()
 					nameEscBuf.WriteString(`"`)
 					HTMLEscape(&nameEscBuf, field.nameBytes)
@@ -1321,6 +1324,7 @@ func typeFields(t reflect.Type) structFields {
 				}
 
 				// Record new anonymous struct to explore in next round.
+				// 否者就会继续往匿名结构体搜索
 				nextCount[ft]++
 				if nextCount[ft] == 1 {
 					next = append(next, field{name: ft.Name(), index: index, typ: ft})
