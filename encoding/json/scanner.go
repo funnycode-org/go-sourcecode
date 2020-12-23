@@ -203,11 +203,14 @@ func stateBeginValueOrEmpty(s *scanner, c byte) int {
 // stateBeginValue is the state at the beginning of the input.
 func stateBeginValue(s *scanner, c byte) int {
 	if c <= ' ' && isSpace(c) {
+		// 忽略空格、制表符、回车、换行
 		return scanSkipSpace
 	}
 	switch c {
 	case '{':
+		// 下一个字符要么是'}',要么是",所以使用stateBeginStringOrEmpty
 		s.step = stateBeginStringOrEmpty
+		// "{"和"}"包围的字节数组可反序列化成对象，设置状态正在编码到对象
 		s.pushParseState(parseObjectKey)
 		return scanBeginObject
 	case '[':
@@ -245,7 +248,7 @@ func stateBeginStringOrEmpty(s *scanner, c byte) int {
 	if c <= ' ' && isSpace(c) {
 		return scanSkipSpace
 	}
-	if c == '}' {
+	if c == '}' {// {}内没有反序列化的字节
 		n := len(s.parseState)
 		s.parseState[n-1] = parseObjectValue
 		return stateEndValue(s, c)
@@ -258,10 +261,11 @@ func stateBeginString(s *scanner, c byte) int {
 	if c <= ' ' && isSpace(c) {
 		return scanSkipSpace
 	}
-	if c == '"' {
+	if c == '"' {// json的keu必须是"开头
 		s.step = stateInString
 		return scanBeginLiteral
 	}
+	// 否则就是无效的json字节
 	return s.error(c, "looking for beginning of object key string")
 }
 
