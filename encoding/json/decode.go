@@ -119,6 +119,7 @@ type Unmarshaler interface {
 	UnmarshalJSON([]byte) error
 }
 
+// 描述了json的值和go的字段类型不匹配
 // An UnmarshalTypeError describes a JSON value that was
 // not appropriate for a value of a specific Go type.
 type UnmarshalTypeError struct {
@@ -169,12 +170,12 @@ func (e *InvalidUnmarshalError) Error() string {
 
 func (d *decodeState) unmarshal(v interface{}) error {
 	rv := reflect.ValueOf(v)
-	if rv.Kind() != reflect.Ptr || rv.IsNil() {
-		return &InvalidUnmarshalError{reflect.TypeOf(v)}
-	}
+	//if rv.Kind() != reflect.Ptr || rv.IsNil() { // 只接受指针，并且指针不为nil
+	//	return &InvalidUnmarshalError{reflect.TypeOf(v)}
+	//}
 
 	d.scan.reset()
-	d.scanWhile(scanSkipSpace)
+	d.scanWhile(scanSkipSpace) // 忽略所有的空格字节
 	// We decode rv not rv.Elem because the Unmarshaler interface
 	// test must be applied at the top level of the value.
 	err := d.value(rv)
@@ -203,8 +204,8 @@ func (n Number) Int64() (int64, error) {
 // decodeState represents the state while decoding a JSON value.
 type decodeState struct {
 	data         []byte
-	off          int // next read offset in data
-	opcode       int // last read result
+	off          int // next read offset in data 字节偏移
+	opcode       int // last read result 最后一次读取的操作码
 	scan         scanner
 	errorContext struct { // provides context for type errors
 		Struct     reflect.Type
@@ -244,6 +245,7 @@ func (d *decodeState) saveError(err error) {
 	}
 }
 
+// 把错误的类型和字段的名称塞到错误里面去
 // addErrorContext returns a new error enhanced with information from d.errorContext
 func (d *decodeState) addErrorContext(err error) error {
 	if d.errorContext.Struct != nil || len(d.errorContext.FieldStack) > 0 {
@@ -350,6 +352,7 @@ Switch:
 // value consumes a JSON value from d.data[d.off-1:], decoding into v, and
 // reads the following byte ahead. If v is invalid, the value is discarded.
 // The first byte of the value has been read already.
+// 读取d.data[d.off-1:]反序列化到结构体中
 func (d *decodeState) value(v reflect.Value) error {
 	switch d.opcode {
 	default:
@@ -371,7 +374,7 @@ func (d *decodeState) value(v reflect.Value) error {
 				return err
 			}
 		} else {
-			d.skip()
+			d.skip() // 忽略正在序列化到v类型的所有字节
 		}
 		d.scanNext()
 

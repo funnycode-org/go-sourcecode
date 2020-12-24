@@ -122,7 +122,7 @@ const (
 	scanBeginArray          // begin array
 	scanArrayValue          // just finished array value
 	scanEndArray            // end array (implies scanArrayValue if possible)
-	scanSkipSpace           // space byte; can skip; known to be last "continue" result
+	scanSkipSpace           // space byte; can skip; known to be last "continue" result 可以忽略的字节的标记
 
 	// Stop.
 	scanEnd   // top-level value ended *before* this byte; known to be first "stop" result
