@@ -195,12 +195,14 @@ func stateBeginValueOrEmpty(s *scanner, c byte) int {
 		return scanSkipSpace
 	}
 	if c == ']' {
+		// 遇到 ‘]’，说明扫完了数组
 		return stateEndValue(s, c)
 	}
 	return stateBeginValue(s, c)
 }
 
 // stateBeginValue is the state at the beginning of the input.
+// 开始检查json字节
 func stateBeginValue(s *scanner, c byte) int {
 	if c <= ' ' && isSpace(c) {
 		// 忽略空格、制表符、回车、换行
@@ -212,11 +214,12 @@ func stateBeginValue(s *scanner, c byte) int {
 		s.step = stateBeginStringOrEmpty
 		// "{"和"}"包围的字节数组可反序列化成对象，设置状态正在编码到对象
 		s.pushParseState(parseObjectKey)
-		return scanBeginObject
+		return scanBeginObject // 标记开始扫描对象
 	case '[':
+		// 后面一定要扫描数组
 		s.step = stateBeginValueOrEmpty
 		s.pushParseState(parseArrayValue)
-		return scanBeginArray
+		return scanBeginArray // 标记开始扫描对象
 	case '"':
 		s.step = stateInString
 		return scanBeginLiteral
