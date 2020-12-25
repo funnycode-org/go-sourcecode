@@ -134,8 +134,8 @@ const (
 // being scanned. If the parser is inside a nested value
 // the parseState describes the nested state, outermost at entry 0.
 const (
-	parseObjectKey   = iota // parsing object key (before colon)
-	parseObjectValue        // parsing object value (after colon)
+	parseObjectKey   = iota // parsing object key (before colon) 转换key
+	parseObjectValue        // parsing object value (after colon) 转换value
 	parseArrayValue         // parsing array value
 )
 
@@ -276,7 +276,7 @@ func stateBeginString(s *scanner, c byte) int {
 // such as after reading `{}` or `true` or `["x"`.
 func stateEndValue(s *scanner, c byte) int {
 	n := len(s.parseState)
-	if n == 0 {
+	if n == 0 {//已经扫描完了所有有效的json字节
 		// Completed top-level before the current byte.
 		s.step = stateEndTop
 		s.endTop = true

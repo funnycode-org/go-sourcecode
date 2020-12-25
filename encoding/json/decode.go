@@ -170,9 +170,9 @@ func (e *InvalidUnmarshalError) Error() string {
 
 func (d *decodeState) unmarshal(v interface{}) error {
 	rv := reflect.ValueOf(v)
-	//if rv.Kind() != reflect.Ptr || rv.IsNil() { // 只接受指针，并且指针不为nil
-	//	return &InvalidUnmarshalError{reflect.TypeOf(v)}
-	//}
+	if rv.Kind() != reflect.Ptr || rv.IsNil() { // 只接受指针，并且指针不为nil
+		return &InvalidUnmarshalError{reflect.TypeOf(v)}
+	}
 
 	d.scan.reset()
 	d.scanWhile(scanSkipSpace) // 忽略所有的空格字节
@@ -315,7 +315,7 @@ func (d *decodeState) rescanLiteral() {
 	data, i := d.data, d.off
 Switch:
 	switch data[i-1] {
-	case '"': // string
+	case '"': // string 会扫完""之间的字节
 		for ; i < len(data); i++ {
 			switch data[i] {
 			case '\\':
@@ -417,6 +417,7 @@ func (d *decodeState) valueQuoted() interface{} {
 	return unquotedValue{}
 }
 
+// 找到v指针指向的最终的结构体值
 // indirect walks down v allocating pointers as needed,
 // until it gets to a non-pointer.
 // If it encounters an Unmarshaler, indirect stops and returns that.
@@ -471,10 +472,13 @@ func indirect(v reflect.Value, decodingNull bool) (Unmarshaler, encoding.TextUnm
 			v = v.Elem()
 			break
 		}
+		// 这是个啥操作？没看懂。
 		if v.IsNil() {
 			v.Set(reflect.New(v.Type().Elem()))
 		}
+		// 如果结构体有方法并且能获取到interface类型的值
 		if v.Type().NumMethod() > 0 && v.CanInterface() {
+			// 判断是否实现了Unmarshaler
 			if u, ok := v.Interface().(Unmarshaler); ok {
 				return u, nil, reflect.Value{}
 			}
@@ -666,9 +670,11 @@ func (d *decodeState) object(v reflect.Value) error {
 		// Read opening " of string key or closing }.
 		d.scanWhile(scanSkipSpace)
 		if d.opcode == scanEndObject {
+			// 读到了}则退出循环
 			// closing } - can only happen on first iteration.
 			break
 		}
+		// 正在扫描具体key和value
 		if d.opcode != scanBeginLiteral {
 			panic(phasePanicMsg)
 		}
