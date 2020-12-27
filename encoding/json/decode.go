@@ -213,7 +213,7 @@ type decodeState struct {
 	}
 	savedError            error
 	useNumber             bool
-	disallowUnknownFields bool
+	disallowUnknownFields bool // 是否允许结构体字段不存在
 }
 
 // readIndex returns the position of the last byte read.
@@ -313,6 +313,7 @@ func (d *decodeState) scanWhile(op int) {
 // and scan a literal's bytes much more quickly.
 func (d *decodeState) rescanLiteral() {
 	data, i := d.data, d.off
+	println("值:", string(data[i-1]))
 Switch:
 	switch data[i-1] {
 	case '"': // string 会扫完""之间的字节
@@ -320,7 +321,7 @@ Switch:
 			switch data[i] {
 			case '\\':
 				i++ // escaped char
-			case '"':
+			case '"':// 遇到第二个"表示扫描结束了，跳出循环
 				i++ // tokenize the closing quote too
 				break Switch
 			}
@@ -352,7 +353,7 @@ Switch:
 // value consumes a JSON value from d.data[d.off-1:], decoding into v, and
 // reads the following byte ahead. If v is invalid, the value is discarded.
 // The first byte of the value has been read already.
-// 读取d.data[d.off-1:]反序列化到结构体中
+// 读取d.data[d.off-1:]反序列化到结构体中或者字段中
 func (d *decodeState) value(v reflect.Value) error {
 	switch d.opcode {
 	default:
@@ -604,7 +605,7 @@ func (d *decodeState) array(v reflect.Value) error {
 
 var nullLiteral = []byte("null")
 var textUnmarshalerType = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
-
+// 反序列对象
 // object consumes an object from d.data[d.off-1:], decoding into v.
 // The first byte ('{') of the object has been read already.
 func (d *decodeState) object(v reflect.Value) error {
@@ -680,9 +681,9 @@ func (d *decodeState) object(v reflect.Value) error {
 		}
 
 		// Read key.
-		start := d.readIndex()
-		d.rescanLiteral()
-		item := d.data[start:d.readIndex()]
+		start := d.readIndex() // key的开始位置
+		d.rescanLiteral() // 扫描完key
+		item := d.data[start:d.readIndex()] // 得到key
 		key, ok := unquoteBytes(item)
 		if !ok {
 			panic(phasePanicMsg)
@@ -710,7 +711,7 @@ func (d *decodeState) object(v reflect.Value) error {
 				// linear search.
 				for i := range fields.list {
 					ff := &fields.list[i]
-					if ff.equalFold(ff.nameBytes, key) {
+					if ff.equalFold(ff.nameBytes, key) { // 忽略大小写判断
 						f = ff
 						break
 					}
@@ -720,7 +721,7 @@ func (d *decodeState) object(v reflect.Value) error {
 				subv = v
 				destring = f.quoted
 				for _, i := range f.index {
-					if subv.Kind() == reflect.Ptr {
+					if subv.Kind() == reflect.Ptr { // 指针取出值
 						if subv.IsNil() {
 							// If a struct embeds a pointer to an unexported type,
 							// it is not possible to set a newly allocated value
@@ -743,7 +744,7 @@ func (d *decodeState) object(v reflect.Value) error {
 				}
 				d.errorContext.FieldStack = append(d.errorContext.FieldStack, f.name)
 				d.errorContext.Struct = t
-			} else if d.disallowUnknownFields {
+			} else if d.disallowUnknownFields { // 判断是否允许没有字段可序列化的情况
 				d.saveError(fmt.Errorf("json: unknown field %q", key))
 			}
 		}
@@ -851,6 +852,7 @@ func (d *decodeState) convertNumber(s string) (interface{}, error) {
 
 var numberType = reflect.TypeOf(Number(""))
 
+// 该方法就是把value塞到字段里面
 // literalStore decodes a literal stored in item into v.
 //
 // fromQuoted indicates whether this literal came from unwrapping a
@@ -868,7 +870,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 	if u != nil {
 		return u.UnmarshalJSON(item)
 	}
-	if ut != nil {
+	if ut != nil {// 实现了TextUnmarshaler
 		if item[0] != '"' {
 			if fromQuoted {
 				d.saveError(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
@@ -900,20 +902,20 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 	case 'n': // null
 		// The main parser checks that only true and false can reach here,
 		// but if this was a quoted string input, it could be anything.
-		if fromQuoted && string(item) != "null" {
+		if fromQuoted && string(item) != "null" { // 字段有',string'标签，以n开头，必须是null
 			d.saveError(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			break
 		}
 		switch v.Kind() {
-		case reflect.Interface, reflect.Ptr, reflect.Map, reflect.Slice:
+		case reflect.Interface, reflect.Ptr, reflect.Map, reflect.Slice: // 设置给interface{},指针,map,切片一个初始化的值
 			v.Set(reflect.Zero(v.Type()))
 			// otherwise, ignore null for primitives/string
 		}
-	case 't', 'f': // true, false
+	case 't', 'f': // true, false 以t或者f开头的value
 		value := item[0] == 't'
 		// The main parser checks that only true and false can reach here,
 		// but if this was a quoted string input, it could be anything.
-		if fromQuoted && string(item) != "true" && string(item) != "false" {
+		if fromQuoted && string(item) != "true" && string(item) != "false" { // 字段有',string'标签，必须是true或者false
 			d.saveError(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			break
 		}
@@ -925,27 +927,27 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 				d.saveError(&UnmarshalTypeError{Value: "bool", Type: v.Type(), Offset: int64(d.readIndex())})
 			}
 		case reflect.Bool:
-			v.SetBool(value)
+			v.SetBool(value) // 给bool类型设值
 		case reflect.Interface:
-			if v.NumMethod() == 0 {
+			if v.NumMethod() == 0 { // 空接口
 				v.Set(reflect.ValueOf(value))
-			} else {
-				d.saveError(&UnmarshalTypeError{Value: "bool", Type: v.Type(), Offset: int64(d.readIndex())})
+			} else { // 非空接口
+				d.saveError(&UnmarshalTypeError{Value: "bool", Type: v.Type(), Offset: int64(d.readIndex())}) // 接口
 			}
 		}
 
 	case '"': // string
-		s, ok := unquoteBytes(item)
+		s, ok := unquoteBytes(item) // 获取引号之间的值
 		if !ok {
 			if fromQuoted {
 				return fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type())
 			}
 			panic(phasePanicMsg)
 		}
-		switch v.Kind() {
+		switch v.Kind() { // 被引号引用的字节只考虑反序列化到切片，字符串，空接口
 		default:
 			d.saveError(&UnmarshalTypeError{Value: "string", Type: v.Type(), Offset: int64(d.readIndex())})
-		case reflect.Slice:
+		case reflect.Slice: // 切片类型，就要把引号之间的字符串当做base64字符串反序列化到切片，且切片的元素的类型是uint8
 			if v.Type().Elem().Kind() != reflect.Uint8 {
 				d.saveError(&UnmarshalTypeError{Value: "string", Type: v.Type(), Offset: int64(d.readIndex())})
 				break
@@ -957,12 +959,12 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 				break
 			}
 			v.SetBytes(b[:n])
-		case reflect.String:
+		case reflect.String: // 直接把字符串填充到string类型
 			if v.Type() == numberType && !isValidNumber(string(s)) {
 				return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", item)
 			}
 			v.SetString(string(s))
-		case reflect.Interface:
+		case reflect.Interface: // 接口必须是空接口
 			if v.NumMethod() == 0 {
 				v.Set(reflect.ValueOf(string(s)))
 			} else {
@@ -970,8 +972,8 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			}
 		}
 
-	default: // number
-		if c != '-' && (c < '0' || c > '9') {
+	default: // number 默认是数字类型
+		if c != '-' && (c < '0' || c > '9') { // 无效的数字
 			if fromQuoted {
 				return fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type())
 			}
@@ -979,7 +981,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		}
 		s := string(item)
 		switch v.Kind() {
-		default:
+		default: // Number 类型
 			if v.Kind() == reflect.String && v.Type() == numberType {
 				// s must be a valid number, because it's
 				// already been tokenized.
@@ -990,7 +992,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 				return fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type())
 			}
 			d.saveError(&UnmarshalTypeError{Value: "number", Type: v.Type(), Offset: int64(d.readIndex())})
-		case reflect.Interface:
+		case reflect.Interface: // 把数字填充到空接口字段
 			n, err := d.convertNumber(s)
 			if err != nil {
 				d.saveError(err)
@@ -1002,7 +1004,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			}
 			v.Set(reflect.ValueOf(n))
 
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64: // 把整数填充到int*里面
 			n, err := strconv.ParseInt(s, 10, 64)
 			if err != nil || v.OverflowInt(n) {
 				d.saveError(&UnmarshalTypeError{Value: "number " + s, Type: v.Type(), Offset: int64(d.readIndex())})
@@ -1010,7 +1012,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			}
 			v.SetInt(n)
 
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:  // 把正整数填充到uint*里面
 			n, err := strconv.ParseUint(s, 10, 64)
 			if err != nil || v.OverflowUint(n) {
 				d.saveError(&UnmarshalTypeError{Value: "number " + s, Type: v.Type(), Offset: int64(d.readIndex())})
@@ -1018,7 +1020,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			}
 			v.SetUint(n)
 
-		case reflect.Float32, reflect.Float64:
+		case reflect.Float32, reflect.Float64: // 把浮点数整数填充到float*里面
 			n, err := strconv.ParseFloat(s, v.Type().Bits())
 			if err != nil || v.OverflowFloat(n) {
 				d.saveError(&UnmarshalTypeError{Value: "number " + s, Type: v.Type(), Offset: int64(d.readIndex())})
@@ -1193,11 +1195,12 @@ func unquote(s []byte) (t string, ok bool) {
 	return
 }
 
+// 取出双引号之间的值
 func unquoteBytes(s []byte) (t []byte, ok bool) {
 	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
 		return
 	}
-	s = s[1 : len(s)-1]
+	s = s[1 : len(s)-1] // 直接取出双引号之间的值
 
 	// Check for unusual characters. If there are none,
 	// then no unquoting is needed, so return a slice of the
@@ -1205,7 +1208,7 @@ func unquoteBytes(s []byte) (t []byte, ok bool) {
 	r := 0
 	for r < len(s) {
 		c := s[r]
-		if c == '\\' || c == '"' || c < ' ' {
+		if c == '\\' || c == '"' || c < ' ' { // 遇到非法json字节
 			break
 		}
 		if c < utf8.RuneSelf {
@@ -1213,12 +1216,12 @@ func unquoteBytes(s []byte) (t []byte, ok bool) {
 			continue
 		}
 		rr, size := utf8.DecodeRune(s[r:])
-		if rr == utf8.RuneError && size == 1 {
+		if rr == utf8.RuneError && size == 1 { // 不是rune,非法json字节
 			break
 		}
-		r += size
+		r += size // 加上rune的长度
 	}
-	if r == len(s) {
+	if r == len(s) { //长度相等表示顺利检测完，都是有效的json字节
 		return s, true
 	}
 

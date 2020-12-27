@@ -114,12 +114,12 @@ func freeScanner(scan *scanner) {
 const (
 	// Continue.
 	scanContinue     = iota // uninteresting byte
-	scanBeginLiteral        // end implied by next result != scanContinue
-	scanBeginObject         // begin object
+	scanBeginLiteral        // end implied by next result != scanContinue 正在扫描value
+	scanBeginObject         // begin object 正在扫描对象也就是 {}里面的数据
 	scanObjectKey           // just finished object key (string)
 	scanObjectValue         // just finished non-last object value
 	scanEndObject           // end object (implies scanObjectValue if possible)
-	scanBeginArray          // begin array
+	scanBeginArray          // begin array 正在扫描数组或者切片
 	scanArrayValue          // just finished array value
 	scanEndArray            // end array (implies scanArrayValue if possible)
 	scanSkipSpace           // space byte; can skip; known to be last "continue" result 可以忽略的字节的标记
@@ -136,7 +136,7 @@ const (
 const (
 	parseObjectKey   = iota // parsing object key (before colon) 转换key
 	parseObjectValue        // parsing object value (after colon) 转换value
-	parseArrayValue         // parsing array value
+	parseArrayValue         // parsing array value 转换数组的值
 )
 
 // reset prepares the scanner for use.
@@ -274,6 +274,7 @@ func stateBeginString(s *scanner, c byte) int {
 
 // stateEndValue is the state after completing a value,
 // such as after reading `{}` or `true` or `["x"`.
+// 在扫描完一个值（key或者value）的时候，就调用该方法
 func stateEndValue(s *scanner, c byte) int {
 	n := len(s.parseState)
 	if n == 0 {//已经扫描完了所有有效的json字节
@@ -289,13 +290,13 @@ func stateEndValue(s *scanner, c byte) int {
 	ps := s.parseState[n-1]
 	switch ps {
 	case parseObjectKey:
-		if c == ':' {
-			s.parseState[n-1] = parseObjectValue
+		if c == ':' { // 此时状态是扫描key，而且刚扫描完，此时必须是冒号
+			s.parseState[n-1] = parseObjectValue // 扫描完key之后马上要扫描value
 			s.step = stateBeginValue
 			return scanObjectKey
 		}
 		return s.error(c, "after object key")
-	case parseObjectValue:
+	case parseObjectValue: // 刚扫描完value，马上去扫描key
 		if c == ',' {
 			s.parseState[n-1] = parseObjectKey
 			s.step = stateBeginString
