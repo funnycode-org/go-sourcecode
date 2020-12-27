@@ -12,3 +12,6 @@ go 1.14.7源码解读
 ![我的微信公众号](https://img-blog.csdnimg.cn/20201125161339283.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3UwMTA5MjczNDA=,size_16,color_FFFFFF,t_70#pic_center)
 # CSDN也会持续更新
 [CSDN](https://blog.csdn.net/u010927340)
+# 欢迎添加我的微信，一起交流
+![我的微信](./my_wecht.jpeg)
+
